@@ -1,28 +1,9 @@
-/**
- * @license
- * Copyright 2018 Reiichiro Nakano All Rights Reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * =============================================================================
- */
 
 import 'babel-polyfill';
 import * as tf from '@tensorflow/tfjs';
 tf.ENV.set('WEBGL_PACK', false);  // This needs to be done otherwise things run very slow v1.0.4
 import links from './links';
 
-/**
- * Main application to start on window load
- */
 class Main {
   constructor() {
     if (window.mobilecheck()) {
@@ -64,7 +45,6 @@ class Main {
 
     this.initalizeWebcamVariables();
     this.initializeStyleTransfer();
-    this.initializeCombineStyles();
 
     Promise.all([
       this.loadMobileNetStyleModel(),
@@ -73,6 +53,7 @@ class Main {
       console.log('Loaded styleNet');
       this.styleNet = styleNet;
       this.transformNet = transformNet;
+      this.gradualStyler;
       this.enableStylizeButtons()
     });
   }
@@ -161,6 +142,17 @@ class Main {
     };
   }
 
+  async gradualStyler(n = 10, i = 1) {
+    this.startStyling(this.stylized, this.styleRatio*(i/n)).finally(() => { 
+      if (i < n) {
+        this.gradualStyler(n, i+1);
+      }
+      else {
+        this.enableStylizeButtons(); 
+      }      
+    });
+  }
+
   initializeStyleTransfer() {
     // Initialize images
     this.contentImg = document.getElementById('content-img');
@@ -190,9 +182,7 @@ class Main {
     this.styleButton = document.getElementById('style-button');
     this.styleButton.onclick = () => {
       this.disableStylizeButtons();
-      this.startStyling().finally(() => {
-        this.enableStylizeButtons();
-      });
+      this.gradualStyler(25,0)
     };
     this.randomizeButton = document.getElementById('randomize');
     this.randomizeButton.onclick = () => {
@@ -214,76 +204,6 @@ class Main {
     this.styleSelect = document.getElementById('style-select');
     this.styleSelect.onchange = (evt) => this.setImage(this.styleImg, evt.target.value);
     this.styleSelect.onclick = () => this.styleSelect.value = '';
-  }
-
-  initializeCombineStyles() {
-    // Initialize images
-    this.combContentImg = document.getElementById('c-content-img');
-    this.combContentImg.onerror = () => {
-      alert("Error loading " + this.combContentImg.src + ".");
-    }
-    this.combStyleImg1 = document.getElementById('c-style-img-1');
-    this.combStyleImg1.onerror = () => {
-      alert("Error loading " + this.combStyleImg1.src + ".");
-    }
-    this.combStyleImg2 = document.getElementById('c-style-img-2');
-    this.combStyleImg2.onerror = () => {
-      alert("Error loading " + this.combStyleImg2.src + ".");
-    }
-    this.combStylized = document.getElementById('c-stylized');
-
-    // Initialize images
-    this.combContentImgSlider = document.getElementById('c-content-img-size');
-    this.connectImageAndSizeSlider(this.combContentImg, this.combContentImgSlider);
-    this.combStyleImg1Slider = document.getElementById('c-style-img-1-size');
-    this.combStyleImg1Square = document.getElementById('c-style-1-square');
-    this.connectImageAndSizeSlider(this.combStyleImg1, this.combStyleImg1Slider, this.combStyleImg1Square);
-    this.combStyleImg2Slider = document.getElementById('c-style-img-2-size');
-    this.combStyleImg2Square = document.getElementById('c-style-2-square');
-    this.connectImageAndSizeSlider(this.combStyleImg2, this.combStyleImg2Slider, this.combStyleImg2Square);
-
-    this.combStyleRatio = 0.5
-    this.combStyleRatioSlider = document.getElementById('c-stylized-img-ratio');
-    this.combStyleRatioSlider.oninput = (evt) => {
-      this.combStyleRatio = evt.target.value/100.;
-    }
-
-    // Initialize buttons
-    this.combineButton = document.getElementById('combine-button');
-    this.combineButton.onclick = () => {
-      this.disableStylizeButtons();
-      this.startCombining().finally(() => {
-        this.enableStylizeButtons();
-      });
-    };
-    this.combRandomizeButton = document.getElementById('c-randomize');
-    this.combRandomizeButton.onclick = () => {
-      this.combContentImgSlider.value = getRndInteger(256, 400);
-      this.combStyleImg1Slider.value = getRndInteger(100, 400);
-      this.combStyleImg2Slider.value = getRndInteger(100, 400);
-      this.combStyleRatioSlider.value = getRndInteger(0, 100);
-      this.combContentImgSlider.dispatchEvent(new Event("input"));
-      this.combStyleImg1Slider.dispatchEvent(new Event("input"));
-      this.combStyleImg2Slider.dispatchEvent(new Event("input"));
-      this.combStyleRatioSlider.dispatchEvent(new Event("input"));
-      if (getRndInteger(0, 1)) {
-        this.combStyleImg1Square.click();
-      }
-      if (getRndInteger(0, 1)) {
-        this.combStyleImg2Square.click();
-      }
-    }
-
-    // Initialize selectors
-    this.combContentSelect = document.getElementById('c-content-select');
-    this.combContentSelect.onchange = (evt) => this.setImage(this.combContentImg, evt.target.value);
-    this.combContentSelect.onclick = () => this.combContentSelect.value = '';
-    this.combStyle1Select = document.getElementById('c-style-1-select');
-    this.combStyle1Select.onchange = (evt) => this.setImage(this.combStyleImg1, evt.target.value);
-    this.combStyle1Select.onclick = () => this.combStyle1Select.value = '';
-    this.combStyle2Select = document.getElementById('c-style-2-select');
-    this.combStyle2Select.onchange = (evt) => this.setImage(this.combStyleImg2, evt.target.value);
-    this.combStyle2Select.onclick = () => this.combStyle2Select.value = '';
   }
 
   connectImageAndSizeSlider(img, slider, square) {
@@ -332,28 +252,25 @@ class Main {
 
   enableStylizeButtons() {
     this.styleButton.disabled = false;
-    this.combineButton.disabled = false;
     this.modelSelectStyle.disabled = false;
     this.modelSelectTransformer.disabled = false;
     this.styleButton.textContent = 'Stylize';
-    this.combineButton.textContent = 'Combine Styles';
   }
 
   disableStylizeButtons() {
     this.styleButton.disabled = true;
-    this.combineButton.disabled = true;
     this.modelSelectStyle.disabled = true;
     this.modelSelectTransformer.disabled = true;
   }
 
-  async startStyling() {
+  async startStyling(canvas, styleRatio) {
     await tf.nextFrame();
     this.styleButton.textContent = 'Generating 100D style representation';
     await tf.nextFrame();
     let bottleneck = await tf.tidy(() => {
       return this.styleNet.predict(tf.browser.fromPixels(this.styleImg).toFloat().div(tf.scalar(255)).expandDims());
     })
-    if (this.styleRatio !== 1.0) {
+    if (styleRatio !== 1.0) {
       this.styleButton.textContent = 'Generating 100D identity style representation';
       await tf.nextFrame();
       const identityBottleneck = await tf.tidy(() => {
@@ -361,8 +278,8 @@ class Main {
       })
       const styleBottleneck = bottleneck;
       bottleneck = await tf.tidy(() => {
-        const styleBottleneckScaled = styleBottleneck.mul(tf.scalar(this.styleRatio));
-        const identityBottleneckScaled = identityBottleneck.mul(tf.scalar(1.0-this.styleRatio));
+        const styleBottleneckScaled = styleBottleneck.mul(tf.scalar(styleRatio));
+        const identityBottleneckScaled = identityBottleneck.mul(tf.scalar(1.0-styleRatio));
         return styleBottleneckScaled.addStrict(identityBottleneckScaled)
       })
       styleBottleneck.dispose();
@@ -373,40 +290,8 @@ class Main {
     const stylized = await tf.tidy(() => {
       return this.transformNet.predict([tf.browser.fromPixels(this.contentImg).toFloat().div(tf.scalar(255)).expandDims(), bottleneck]).squeeze();
     })
-    await tf.browser.toPixels(stylized, this.stylized);
+    await tf.browser.toPixels(stylized, canvas);
     bottleneck.dispose();  // Might wanna keep this around
-    stylized.dispose();
-  }
-
-  async startCombining() {
-    await tf.nextFrame();
-    this.combineButton.textContent = 'Generating 100D style representation of image 1';
-    await tf.nextFrame();
-    const bottleneck1 = await tf.tidy(() => {
-      return this.styleNet.predict(tf.browser.fromPixels(this.combStyleImg1).toFloat().div(tf.scalar(255)).expandDims());
-    })
-    
-    this.combineButton.textContent = 'Generating 100D style representation of image 2';
-    await tf.nextFrame();
-    const bottleneck2 = await tf.tidy(() => {
-      return this.styleNet.predict(tf.browser.fromPixels(this.combStyleImg2).toFloat().div(tf.scalar(255)).expandDims());
-    });
-
-    this.combineButton.textContent = 'Stylizing image...';
-    await tf.nextFrame();
-    const combinedBottleneck = await tf.tidy(() => {
-      const scaledBottleneck1 = bottleneck1.mul(tf.scalar(1-this.combStyleRatio));
-      const scaledBottleneck2 = bottleneck2.mul(tf.scalar(this.combStyleRatio));
-      return scaledBottleneck1.addStrict(scaledBottleneck2);
-    });
-
-    const stylized = await tf.tidy(() => {
-      return this.transformNet.predict([tf.browser.fromPixels(this.combContentImg).toFloat().div(tf.scalar(255)).expandDims(), combinedBottleneck]).squeeze();
-    })
-    await tf.browser.toPixels(stylized, this.combStylized);
-    bottleneck1.dispose();  // Might wanna keep this around
-    bottleneck2.dispose();
-    combinedBottleneck.dispose();
     stylized.dispose();
   }
 
